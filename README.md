@@ -6,13 +6,18 @@ Everything runs on your machine. No cloud APIs, no data leaves your computer.
 
 ## Install
 
-Requires a Mac with Apple Silicon (M1/M2/M3/M4). Paste in Terminal:
+**Requirements:**
+- Mac with Apple Silicon (M1/M2/M3/M4)
+- macOS 13 Ventura or later
+- ~2.5 GB of disk space (Python packages + AI models)
+
+Paste in Terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vishoo7/Utter/main/install.sh | bash
 ```
 
-This installs everything automatically (~5-10 min). When done, launch Utter by:
+The script installs everything automatically (~5-10 min depending on internet speed): Homebrew, Python, AI models, and a ready-to-use app. When done, launch Utter by:
 - Double-clicking **Utter** in /Applications, or
 - Running `utter` from Terminal
 
