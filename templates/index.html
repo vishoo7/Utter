@@ -26,6 +26,25 @@
     letter-spacing: 0.05em;
   }
 
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+  }
+  .tab {
+    padding: 0.6rem 1.5rem;
+    background: #16213e;
+    color: #888;
+    border: 1px solid #333;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: background 0.2s, color 0.2s;
+  }
+  .tab:first-child { border-radius: 6px 0 0 6px; }
+  .tab:last-child { border-radius: 0 6px 6px 0; }
+  .tab.active { background: #0f3460; color: #fff; border-color: #0f3460; }
+
   .container {
     width: 100%;
     max-width: 700px;
@@ -33,6 +52,9 @@
     flex-direction: column;
     gap: 1rem;
   }
+
+  .panel { display: none; }
+  .panel.active { display: flex; flex-direction: column; gap: 1rem; }
 
   textarea {
     width: 100%;
@@ -88,7 +110,7 @@
     color: #888;
     min-height: 1.4em;
   }
-  .status.generating { color: #f0a500; }
+  .status.generating, .status.transcribing { color: #f0a500; }
   .status.done { color: #4ecca3; }
   .status.error { color: #e74c3c; }
 
@@ -156,38 +178,114 @@
     font-size: 0.8rem;
     flex-shrink: 0;
   }
+
+  /* Transcribe panel */
+  .drop-zone {
+    border: 2px dashed #333;
+    border-radius: 8px;
+    padding: 3rem 1rem;
+    text-align: center;
+    color: #888;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .drop-zone.dragover { border-color: #0f3460; background: rgba(15,52,96,0.2); }
+  .drop-zone .file-name { color: #4ecca3; margin-top: 0.5rem; font-size: 0.9rem; }
+
+  .transcript-output {
+    width: 100%;
+    min-height: 200px;
+    padding: 1rem;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #16213e;
+    color: #e0e0e0;
+    font-size: 1rem;
+    line-height: 1.5;
+    font-family: inherit;
+    resize: vertical;
+  }
+
+  .transcript-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+  .btn-copy { background: #4ecca3; color: #1a1a2e; }
+  .btn-copy:hover { background: #3db890; }
+  .btn-speak { background: #0f3460; }
 </style>
 </head>
 <body>
 
 <h1>Utter</h1>
 
+<div class="tabs">
+  <div class="tab active" data-tab="speak">Text to Speech</div>
+  <div class="tab" data-tab="transcribe">Speech to Text</div>
+</div>
+
 <div class="container">
-  <textarea id="textInput" placeholder="Enter text to speak..."></textarea>
 
-  <div class="controls">
-    <select id="voiceSelect">
-      <option value="af_heart">af_heart</option>
-      <option value="am_michael">am_michael</option>
-      <option value="bf_emma">bf_emma</option>
-    </select>
-    <button class="btn-generate" id="generateBtn" onclick="generate()">Generate</button>
+  <!-- TTS Panel -->
+  <div class="panel active" id="panel-speak">
+    <textarea id="textInput" placeholder="Enter text to speak..."></textarea>
+
+    <div class="controls">
+      <select id="voiceSelect">
+        <option value="af_heart">af_heart</option>
+        <option value="am_michael">am_michael</option>
+        <option value="bf_emma">bf_emma</option>
+      </select>
+      <button class="btn-generate" id="generateBtn" onclick="generate()">Generate</button>
+    </div>
+
+    <div class="status" id="status">Idle</div>
+
+    <div class="player-section" id="playerSection">
+      <audio controls id="audioPlayer"></audio>
+      <button class="btn-download" id="downloadBtn" onclick="downloadAudio()">Download</button>
+    </div>
+
+    <div class="history" id="historySection" style="display:none">
+      <h2>History</h2>
+      <ul class="history-list" id="historyList"></ul>
+    </div>
   </div>
 
-  <div class="status" id="status">Idle</div>
+  <!-- STT Panel -->
+  <div class="panel" id="panel-transcribe">
+    <div class="drop-zone" id="dropZone">
+      <div>Drop an audio file here or click to browse</div>
+      <div class="file-name" id="fileName"></div>
+      <input type="file" id="fileInput" accept="audio/*" style="display:none">
+    </div>
 
-  <div class="player-section" id="playerSection">
-    <audio controls id="audioPlayer"></audio>
-    <button class="btn-download" id="downloadBtn" onclick="downloadAudio()">Download</button>
+    <button id="transcribeBtn" onclick="transcribeAudio()" disabled>Transcribe</button>
+
+    <div class="status" id="sttStatus">Idle</div>
+
+    <textarea class="transcript-output" id="transcriptOutput" placeholder="Transcript will appear here..." readonly></textarea>
+
+    <div class="transcript-actions">
+      <button class="btn-copy" id="copyBtn" onclick="copyTranscript()">Copy</button>
+      <button class="btn-speak" id="speakBtn" onclick="sendToTTS()">Send to TTS</button>
+    </div>
   </div>
 
-  <div class="history" id="historySection" style="display:none">
-    <h2>History</h2>
-    <ul class="history-list" id="historyList"></ul>
-  </div>
 </div>
 
 <script>
+  // --- Tab switching ---
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ===================== TTS =====================
   let polling = null;
   let currentFile = null;
 
@@ -197,7 +295,7 @@
     if (!text) return;
 
     document.getElementById('generateBtn').disabled = true;
-    setStatus('generating', 'Generating\u2026');
+    setStatus('status', 'generating', 'Generating\u2026');
 
     fetch('/generate', {
       method: 'POST',
@@ -207,14 +305,14 @@
     .then(r => r.json())
     .then(data => {
       if (data.status !== 'ok') {
-        setStatus('error', data.message || 'Error');
+        setStatus('status', 'error', data.message || 'Error');
         document.getElementById('generateBtn').disabled = false;
         return;
       }
       startPolling();
     })
     .catch(() => {
-      setStatus('error', 'Request failed');
+      setStatus('status', 'error', 'Request failed');
       document.getElementById('generateBtn').disabled = false;
     });
   }
@@ -227,22 +325,22 @@
           clearInterval(polling);
           polling = null;
           currentFile = data.filename;
-          setStatus('done', 'Done');
+          setStatus('status', 'done', 'Done');
           showPlayer(data.filename);
           document.getElementById('generateBtn').disabled = false;
           loadHistory();
         } else if (data.state === 'error') {
           clearInterval(polling);
           polling = null;
-          setStatus('error', data.error || 'Generation failed');
+          setStatus('status', 'error', data.error || 'Generation failed');
           document.getElementById('generateBtn').disabled = false;
         }
       });
     }, 1000);
   }
 
-  function setStatus(cls, text) {
-    const el = document.getElementById('status');
+  function setStatus(id, cls, text) {
+    const el = document.getElementById(id);
     el.className = 'status ' + cls;
     el.textContent = text;
   }
@@ -322,8 +420,103 @@
     });
   }
 
-  // Load history on page load
   loadHistory();
+
+  // ===================== STT =====================
+  let sttPolling = null;
+  let selectedFile = null;
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) pickFile(e.dataTransfer.files[0]);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) pickFile(fileInput.files[0]);
+  });
+
+  function pickFile(file) {
+    selectedFile = file;
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('transcribeBtn').disabled = false;
+  }
+
+  function transcribeAudio() {
+    if (!selectedFile) return;
+
+    document.getElementById('transcribeBtn').disabled = true;
+    document.getElementById('transcriptOutput').value = '';
+    setStatus('sttStatus', 'transcribing', 'Transcribing\u2026');
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    fetch('/transcribe', { method: 'POST', body: form })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status !== 'ok') {
+        setStatus('sttStatus', 'error', data.message || 'Error');
+        document.getElementById('transcribeBtn').disabled = false;
+        return;
+      }
+      startSttPolling();
+    })
+    .catch(() => {
+      setStatus('sttStatus', 'error', 'Upload failed');
+      document.getElementById('transcribeBtn').disabled = false;
+    });
+  }
+
+  function startSttPolling() {
+    if (sttPolling) clearInterval(sttPolling);
+    sttPolling = setInterval(() => {
+      fetch('/transcribe/status').then(r => r.json()).then(data => {
+        if (data.state === 'done') {
+          clearInterval(sttPolling);
+          sttPolling = null;
+          document.getElementById('transcriptOutput').value = data.text;
+          setStatus('sttStatus', 'done', 'Done');
+          document.getElementById('transcribeBtn').disabled = false;
+        } else if (data.state === 'error') {
+          clearInterval(sttPolling);
+          sttPolling = null;
+          setStatus('sttStatus', 'error', data.error || 'Transcription failed');
+          document.getElementById('transcribeBtn').disabled = false;
+        }
+      });
+    }, 1000);
+  }
+
+  function copyTranscript() {
+    const text = document.getElementById('transcriptOutput').value;
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+  }
+
+  function sendToTTS() {
+    const text = document.getElementById('transcriptOutput').value.trim();
+    if (!text) return;
+    document.getElementById('textInput').value = text;
+    // Switch to TTS tab
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('[data-tab="speak"]').classList.add('active');
+    document.getElementById('panel-speak').classList.add('active');
+  }
 </script>
 
 </body>

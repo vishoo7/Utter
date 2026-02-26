@@ -3,7 +3,9 @@ import os
 import threading
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
+import tempfile
 from tts import generate_speech
+from stt import load_whisper_model, transcribe
 
 app = Flask(__name__)
 
@@ -13,8 +15,10 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 # Global state
 pipeline = None
+whisper_model = None
 generation_lock = threading.Lock()
 status = {"state": "idle", "filename": None, "error": None}
+transcribe_status = {"state": "idle", "text": None, "error": None}
 
 
 def load_history():
@@ -33,11 +37,14 @@ history = load_history()
 
 
 def load_pipeline():
-    global pipeline
+    global pipeline, whisper_model
     from kokoro import KPipeline
     print("Loading Kokoro pipeline...")
     pipeline = KPipeline(lang_code="a")
     print("Pipeline ready.")
+    print("Loading Whisper model reference...")
+    whisper_model = load_whisper_model()
+    print("Whisper ready (will download on first transcription).")
 
 
 def run_generation(text, voice):
@@ -79,6 +86,48 @@ def generate():
     thread.start()
 
     return jsonify({"status": "ok"})
+
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def run_transcription(audio_path):
+    global transcribe_status
+    try:
+        transcribe_status = {"state": "transcribing", "text": None, "error": None}
+        text = transcribe(whisper_model, audio_path)
+        transcribe_status = {"state": "done", "text": text, "error": None}
+    except Exception as e:
+        transcribe_status = {"state": "error", "text": None, "error": str(e)}
+    finally:
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe_audio():
+    if "file" not in request.files:
+        return jsonify({"status": "error", "message": "No file uploaded"}), 400
+
+    if transcribe_status["state"] == "transcribing":
+        return jsonify({"status": "error", "message": "Transcription already in progress"}), 409
+
+    f = request.files["file"]
+    suffix = os.path.splitext(f.filename)[1] or ".wav"
+    tmp = tempfile.NamedTemporaryFile(dir=UPLOAD_DIR, suffix=suffix, delete=False)
+    f.save(tmp.name)
+    tmp.close()
+
+    thread = threading.Thread(target=run_transcription, args=(tmp.name,))
+    thread.start()
+
+    return jsonify({"status": "ok"})
+
+
+@app.route("/transcribe/status")
+def get_transcribe_status():
+    return jsonify(transcribe_status)
 
 
 @app.route("/audio/<path:filename>")
