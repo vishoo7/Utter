@@ -4,6 +4,20 @@ Local text-to-speech and speech-to-text web app powered by [Kokoro TTS](https://
 
 Everything runs on your machine. No cloud APIs, no data leaves your computer.
 
+## Install
+
+Requires a Mac with Apple Silicon (M1/M2/M3/M4). Paste in Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vishoo7/Utter/main/install.sh | bash
+```
+
+This installs everything automatically (~5-10 min). When done, launch Utter by:
+- Double-clicking **Utter** in /Applications, or
+- Running `utter` from Terminal
+
+To uninstall: `bash ~/.utter/uninstall.sh`
+
 ## Features
 
 **Text to Speech** — Kokoro-82M via `kokoro`
@@ -17,13 +31,11 @@ Everything runs on your machine. No cloud APIs, no data leaves your computer.
 - Runs natively on Apple Silicon via MLX
 - Copy transcript or send it directly to the TTS tab
 
-## Requirements
+## Manual Setup
 
-- macOS with Apple Silicon (M1/M2/M3/M4)
-- Python 3.10+
-- [espeak-ng](https://github.com/espeak-ng/espeak-ng) (`brew install espeak-ng`)
+If you prefer to set things up yourself instead of using the install script:
 
-## Setup
+**Requirements:** macOS with Apple Silicon, Python 3.10+, [espeak-ng](https://github.com/espeak-ng/espeak-ng)
 
 ```bash
 git clone https://github.com/vishoo7/Utter.git
@@ -31,17 +43,10 @@ cd Utter
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 brew install espeak-ng
-```
-
-## Usage
-
-```bash
 ./run.sh
 ```
 
-Then open [http://localhost:5757](http://localhost:5757).
-
-On first run, the Kokoro model (~330MB) and Whisper model (~750MB) will download from HuggingFace automatically and are cached for subsequent runs.
+Then open [http://localhost:5757](http://localhost:5757). On first run, the Kokoro model (~330 MB) and Whisper model (~750 MB) will download automatically.
 
 ## Project Structure
 
@@ -53,7 +58,10 @@ Utter/
 ├── templates/
 │   └── index.html     # Single-page dark mode UI
 ├── static/            # Generated audio files
-├── run.sh             # Launch script
+├── install.sh         # One-line installer
+├── uninstall.sh       # Clean removal
+├── launcher.sh        # App launcher (server + browser)
+├── run.sh             # Dev launch script
 └── requirements.txt
 ```
 
