@@ -48,7 +48,11 @@ info "Checking Xcode Command Line Tools..."
 if xcode-select -p &>/dev/null; then
     ok "Already installed"
 else
-    warn "Not found — installing (a dialog may appear, click Install)"
+    warn "Not found — installing now..."
+    echo ""
+    echo -e "    ${BOLD}A dialog box will appear on your screen.${NC}"
+    echo -e "    ${BOLD}Click \"Install\" and wait for it to finish.${NC}"
+    echo ""
     xcode-select --install 2>/dev/null || true
     echo "    Waiting for installation to complete..."
     until xcode-select -p &>/dev/null; do
@@ -124,7 +128,7 @@ ok "Virtual environment created"
 
 info "Installing Python packages (this may take a few minutes)..."
 "$UTTER_DIR/.venv/bin/pip" install --upgrade pip --quiet
-"$UTTER_DIR/.venv/bin/pip" install -r "$UTTER_DIR/requirements.txt" --quiet
+"$UTTER_DIR/.venv/bin/pip" install -r "$UTTER_DIR/requirements.txt"
 ok "Python packages installed"
 
 # ── Step 6: Pre-download models ────────────────────────────────────────────
@@ -151,7 +155,10 @@ info "Creating 'utter' command..."
 
 chmod +x "$UTTER_DIR/launcher.sh"
 
-# /usr/local/bin may need sudo
+echo ""
+echo "    Your Mac password is needed to create the 'utter' command."
+echo "    (You won't see characters as you type — that's normal.)"
+echo ""
 sudo mkdir -p /usr/local/bin
 
 sudo tee /usr/local/bin/utter > /dev/null << 'LAUNCHER'
@@ -188,6 +195,9 @@ fi
 
 osacompile -o /Applications/Utter.app "$APPLESCRIPT_SRC"
 rm -f "$APPLESCRIPT_SRC"
+
+# Remove Gatekeeper quarantine so macOS doesn't block the app on first open
+xattr -cr /Applications/Utter.app 2>/dev/null || true
 ok "Created /Applications/Utter.app"
 
 # ── Done! ──────────────────────────────────────────────────────────────────
